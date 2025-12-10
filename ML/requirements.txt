@@ -1,0 +1,16 @@
+# Data Science & Machine Learning
+pandas
+numpy
+scikit-learn
+joblib
+matplotlib
+seaborn
+
+# Backend API
+fastapi
+uvicorn
+pydantic
+
+# AI Chatbot (Gemini)
+google-generativeai
+python-dotenv
