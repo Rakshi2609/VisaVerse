@@ -12,25 +12,6 @@ venv/
 ENV/
 .envrc
 
-# Jupyter Notebooks
-.ipynb_checkpoints/
-*.ipynb
-
-# Data files
-*.csv
-*.tsv
-*.xls
-*.xlsx
-*.h5
-*.hdf5
-*.parquet
-*.feather
-*.pkl
-*.joblib
-*.npy
-*.npz
-*.db
-*.sqlite
 
 # VS Code
 .vscode/
