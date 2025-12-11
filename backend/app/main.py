@@ -3,13 +3,16 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import pandas as pd
+import os
 
 # ======================================================
 # LOAD MODEL + ENCODER
 # ======================================================
 
-model = joblib.load("../model/visa_model.pkl")
-encoder = joblib.load("../model/label_encoder.pkl")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+model = joblib.load(os.path.join(BASE_DIR, "model", "visa_model.pkl"))
+encoder = joblib.load(os.path.join(BASE_DIR, "model", "label_encoder.pkl"))
 
 # ======================================================
 # FASTAPI APP CONFIG
