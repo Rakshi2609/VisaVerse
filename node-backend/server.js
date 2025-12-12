@@ -21,6 +21,7 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY || "dummy_key_to_prevent_crash_on_init",
 });
 
+// Best model for speed/quality balance
 const CURRENT_MODEL = "llama-3.3-70b-versatile";
 
 // ------------------ CORS SETUP ------------------
@@ -30,18 +31,21 @@ const whitelist = [
   clientUrl,
   "http://localhost:5173", 
   "http://localhost:3000", 
+  "https://visa-verse-six.vercel.app"
 ];
 
 app.use(
   cors({
     origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl)
       if (!origin) return callback(null, true);
       
+      // If whitelist contains '*' or origin is listed, allow it
       if (whitelist.includes("*") || whitelist.includes(origin)) {
         return callback(null, true);
       } else {
         console.warn(`Blocked CORS request from: ${origin}`);
-        return callback(null, true); // Allow anyway for Demo Stability
+        return callback(null, true); // Allow anyway to prevent demo crashes
       }
     },
     credentials: true,
@@ -50,34 +54,48 @@ app.use(
 
 app.use(express.json());
 
-// ------------------ SESSION STORAGE (WITH STATE) ------------------
-// Stores { history: [], hasWarnedCriminal: boolean }
+// ------------------ CHAT MEMORY ------------------
+// Stores session state: { history: [], hasWarnedCriminal: boolean }
 const chatSessions = new Map();
 
-// ------------------ LOAD KNOWLEDGE (VERCEL SAFE) ------------------
-const ragPath = path.join(process.cwd(), "rag", "visa_knowledge.txt");
-let KNOWLEDGE_TEXT = "General visa rules and document requirements.";
+// ------------------ KNOWLEDGE BASE (FAIL-SAFE) ------------------
+// 1. Define the Backup Text (Hardcoded)
+const BACKUP_KNOWLEDGE = `
+GENERAL VISA RULES & DOCUMENTATION GUIDELINES:
+1. FINANCIAL SUFFICIENCY: Applicants must prove 6 months of steady income via bank statements. Large unexplained deposits are red flags.
+2. TIES TO HOME: You must prove you will return. Evidence: Job contract, property deeds, family ties.
+3. CRIMINAL RECORDS: Major red flag. Requires Police Clearance Certificate (PCC) and proof of rehabilitation.
+4. TRAVEL HISTORY: Previous travel to trusted nations (USA, UK, Schengen) boosts credibility.
+5. COMMON REFUSAL REASONS: Vague itinerary, low savings vs trip cost, weak employment ties.
+`;
 
+let KNOWLEDGE_TEXT = BACKUP_KNOWLEDGE; // Default to backup
+
+// 2. Try to read the file (Bonus if it works)
 try {
+  // Use process.cwd() for Vercel
+  const ragPath = path.join(process.cwd(), "rag", "visa_knowledge.txt");
+  
   if (fs.existsSync(ragPath)) {
     KNOWLEDGE_TEXT = fs.readFileSync(ragPath, "utf8");
-    console.log("✅ Visa Knowledge Base Loaded");
+    console.log("✅ Visa Knowledge Base Loaded from File");
   } else {
-    console.warn(`⚠️ Warning: RAG file not found at: ${ragPath}`);
+    console.warn("⚠️ RAG File not found. Using Embedded Backup Knowledge.");
   }
 } catch (err) {
-  console.error("❌ Error reading RAG file:", err);
+  console.error("❌ Error reading RAG file. Using Backup.", err.message);
+  KNOWLEDGE_TEXT = BACKUP_KNOWLEDGE;
 }
 
-// ------------------ BASE PERSONA ------------------
-const BASE_PERSONA = `
+// ------------------ SYSTEM MESSAGE ------------------
+const SYSTEM_MESSAGE = `
 You are "VisaExpert AI", a warm, friendly, highly strategic visa consultant.
 
 YOUR STYLE:
 - Keep replies SHORT, helpful, and natural.
 - First analyze the user's ML prediction + profile.
+- Highlight the MAIN factor affecting approval (criminal record, income, travel, ties).
 - Give simple, clear improvements.
-- Do NOT always use phases — only when helpful.
 - Respond like a human consultant, not a script.
 `;
 
@@ -112,10 +130,9 @@ async function handleChatMessage(req, res) {
       sessionId = sessionId || uuidv4();
       console.log("🆕 New Session:", sessionId);
       
-      // Initialize state with the "Done Tag"
       chatSessions.set(sessionId, {
         history: [],
-        hasWarnedCriminal: false, 
+        hasWarnedCriminal: false, // The "Done Tag"
       });
     }
 
@@ -124,7 +141,7 @@ async function handleChatMessage(req, res) {
     let history = session.history;
 
     // 3. DYNAMIC PROMPT LOGIC (ANTI-LOOP)
-    let dynamicSystemPrompt = BASE_PERSONA;
+    let dynamicSystemPrompt = SYSTEM_MESSAGE;
     let isCriminal = userProfile && userProfile.criminal_record === 1;
 
     if (isCriminal) {
@@ -137,14 +154,14 @@ async function handleChatMessage(req, res) {
         "I see a critical flag regarding a criminal record. This is the main blocker. We need to address this first."
         Then suggest a "Rehabilitation Strategy".
         `;
-        session.hasWarnedCriminal = true; // Set Flag to TRUE
+        session.hasWarnedCriminal = true; // Mark as done
       } else {
         // TURN 2+: "Done Tag" Active -> Stop repeating!
         dynamicSystemPrompt += `
         ✅ **CONTEXT:** You have ALREADY warned them about the criminal record.
         **DO NOT REPEAT THE WARNING.**
         Now, answer their specific follow-up questions normally.
-        If they ask for a plan, suggest lenient countries (like Germany/Canada) but reiterate the legal requirements gently.
+        If they ask for a plan, suggest lenient countries but remind them gently about the record.
         `;
       }
     }
@@ -156,7 +173,6 @@ async function handleChatMessage(req, res) {
     Knowledge Base: ${KNOWLEDGE_TEXT.substring(0, 1500)}
     `;
 
-    // 5. BUILD MESSAGES
     const messages = [
       { role: "system", content: dynamicSystemPrompt },
       { role: "system", content: context },
@@ -167,16 +183,15 @@ async function handleChatMessage(req, res) {
       { role: "user", content: message },
     ];
 
-    // 6. CALL AI
+    // 5. CALL AI
     const botReply = await callGroq(messages);
 
-    // 7. SAVE HISTORY
+    // 6. SAVE HISTORY
     history.push({ role: "user", text: message });
     history.push({ role: "bot", text: botReply });
     
     if (history.length > 20) history = history.slice(-20);
     
-    // Save updated session state
     session.history = history;
     chatSessions.set(sessionId, session);
 
@@ -210,7 +225,7 @@ app.post("/api/chat/message", (req, res) => {
 
 // ------------------ HEALTH CHECK ------------------
 app.get("/", (req, res) => {
-  res.send("VisaExpert AI Backend is Running 🟢");
+  res.send(`VisaExpert AI Backend Running 🟢 (Knowledge Source: ${KNOWLEDGE_TEXT === BACKUP_KNOWLEDGE ? "Embedded Backup" : "External File"})`);
 });
 
 // ------------------ VERCEL EXPORT ------------------
