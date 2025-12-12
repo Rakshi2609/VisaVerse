@@ -8,6 +8,8 @@ const { v4: uuidv4 } = require("uuid");
 const Groq = require("groq-sdk");
 
 dotenv.config();
+
+// ------------------ EXPRESS APP ------------------
 const app = express();
 
 // ------------------ GROQ SETUP ------------------
@@ -15,49 +17,60 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-// Fastest stable model as of 2025
+// Best stable model on Groq
 const CURRENT_MODEL = "llama-3.3-70b-versatile";
 
-// ------------------ CORS ------------------
+// ------------------ MIDDLEWARE ------------------
+const whitelist = [
+  process.env.CLIENT_URL, // http://localhost:5173
+  "http://localhost:5173", // Fallback for Vite
+  "http://localhost:3000", // Fallback for Create React App
+];
+
 app.use(
   cors({
-    origin: "*", // Hackathon-safe
-    credentials: true,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, or Postman)
+      if (!origin) return callback(null, true);
+      
+      if (whitelist.includes(origin)) {
+        return callback(null, true);
+      } else {
+        console.log("Blocked by CORS:", origin); // Debugging log
+        return callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true, // Allows cookies/headers to be sent
   })
 );
-
 app.use(express.json());
 
 // ------------------ CHAT MEMORY ------------------
 const chatHistories = new Map();
 
-// ------------------ LOAD KNOWLEDGE BASE ------------------
+// ------------------ LOAD KNOWLEDGE ------------------
 const ragPath = path.join(__dirname, "rag", "visa_knowledge.txt");
 let KNOWLEDGE_TEXT = "General visa rules and document requirements.";
 
 if (fs.existsSync(ragPath)) {
   KNOWLEDGE_TEXT = fs.readFileSync(ragPath, "utf8");
-  console.log("✅ Visa Knowledge Base Loaded");
+  console.log("✅ Visa Knowledge Loaded");
 } else {
-  console.log("⚠️ No rag/visa_knowledge.txt found. Using fallback.");
+  console.log("⚠️ Missing rag/visa_knowledge.txt");
 }
 
 // ------------------ SYSTEM MESSAGE ------------------
 const SYSTEM_MESSAGE = `
-You are "VisaExpert AI", a warm, friendly, highly strategic visa consultant.
-
-YOUR STYLE:
-- Keep replies SHORT, helpful, and natural.
-- First analyze the user's ML prediction + profile.
-- Highlight the MAIN factor affecting approval (criminal record, income, travel, ties).
-- Give simple, clear improvements.
-- Do NOT always use phases — only when helpful.
-- Avoid long robotic templates.
-- Respond like a human consultant, not a script.
+You are "VisaExpert AI", a warm, friendly, strategic visa consultant.
+- Keep replies short, helpful, and clear.
+- Use the user's ML prediction + profile.
+- Focus on the MAIN reason affecting approval.
+- Give 2–3 practical fixes.
+- Avoid robotic template replies.
 `;
 
-// ------------------ GROQ CALL ------------------
-async function callGroqAI(messages) {
+// ------------------ AI CALL ------------------
+async function callGroq(messages) {
   try {
     const completion = await groq.chat.completions.create({
       model: CURRENT_MODEL,
@@ -69,7 +82,7 @@ async function callGroqAI(messages) {
     return completion.choices[0].message.content;
   } catch (err) {
     console.error("Groq Error:", err);
-    return "⚠️ The consultant is currently unavailable. Try again shortly.";
+    return "⚠️ The consultant is temporarily unavailable. Please try again.";
   }
 }
 
@@ -77,78 +90,63 @@ async function callGroqAI(messages) {
 async function handleChatMessage(req, res) {
   let { message, sessionId, userProfile, modelPrediction } = req.body;
 
-  if (!message)
-    return res.status(400).json({ error: "Message is required" });
+  if (!message) return res.status(400).json({ error: "Message is required" });
 
-  // Start new session
-  if (!sessionId) {
-    sessionId = uuidv4();
-    console.log("🆕 New Session:", sessionId);
-  }
-
-  // Retrieve memory
+  // Start or load session
+  if (!sessionId) sessionId = uuidv4();
   let history = chatHistories.get(sessionId) || [];
 
-  // Context summary
-  const ragContext = `
+  // Build knowledge context
+  const context = `
 User Profile:
 ${JSON.stringify(userProfile || {}, null, 2)}
 
-ML Model Result:
+ML Prediction:
 ${JSON.stringify(modelPrediction || {}, null, 2)}
 
 Knowledge Base:
 ${KNOWLEDGE_TEXT.substring(0, 1500)}
-
-IMPORTANT:
-- Use this info to respond naturally.
-- Focus on the strongest factor affecting approval.
-- Keep answers short and friendly.
 `;
 
-  // Build messages for Groq API
+  // Construct message array
   const messages = [
     { role: "system", content: SYSTEM_MESSAGE },
-    { role: "system", content: ragContext },
-    ...history.map((m) => ({
-      role: m.role === "bot" ? "assistant" : "user",
-      content: m.text,
+    { role: "system", content: context },
+    ...history.map((msg) => ({
+      role: msg.role === "bot" ? "assistant" : "user",
+      content: msg.text,
     })),
     { role: "user", content: message },
   ];
 
-  // Get AI response
-  const aiResponse = await callGroqAI(messages);
+  const botReply = await callGroq(messages);
 
-  // Save conversation memory (last 10 turns max)
+  // Save memory (limit to last 10 messages)
   history.push({ role: "user", text: message });
-  history.push({ role: "bot", text: aiResponse });
-
+  history.push({ role: "bot", text: botReply });
   if (history.length > 20) history = history.slice(-20);
-
   chatHistories.set(sessionId, history);
 
   res.json({
     sessionId,
-    response: aiResponse,
+    response: botReply,
     history,
   });
 }
 
-// ------------------ SIMPLE QUEUE SYSTEM ------------------
+// ------------------ QUEUE SYSTEM ------------------
 const queue = [];
-let isProcessing = false;
+let processing = false;
 
 function processQueue() {
-  if (isProcessing || queue.length === 0) return;
-  isProcessing = true;
+  if (processing || queue.length === 0) return;
+  processing = true;
 
   const { req, res } = queue.shift();
-  handleChatMessage(req, res)
-    .finally(() => {
-      isProcessing = false;
-      processQueue();
-    });
+  handleChatMessage(req, res).finally(() => {
+    processing = false;
+    processQueue();
+  });
 }
 
 app.post("/api/chat/message", (req, res) => {
@@ -156,9 +154,19 @@ app.post("/api/chat/message", (req, res) => {
   processQueue();
 });
 
-// ------------------ START SERVER ------------------
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 VisaExpert AI (GROQ) running → http://localhost:${PORT}`);
-  console.log(`⚡ Model in use: ${CURRENT_MODEL}`);
+// ------------------ HEALTH CHECK ------------------
+app.get("/", (req, res) => {
+  res.send("VisaExpert AI backend running.");
 });
+
+// ------------------ EXPORT FOR VERCEL ------------------
+module.exports = app;
+
+// ------------------ LOCAL DEVELOPMENT MODE ------------------
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Local server running at http://localhost:${PORT}`);
+    console.log(`⚡ Using Groq model: ${CURRENT_MODEL}`);
+  });
+}
