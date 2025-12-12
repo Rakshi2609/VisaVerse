@@ -40,7 +40,7 @@ app.use(
       }
 
       console.warn(`❌ Blocked CORS request from ${origin}`);
-      return callback(null, true); // Allow anyway (to avoid breaking demo)
+      return callback(null, true);
     },
     credentials: true,
   })
@@ -54,7 +54,7 @@ const chatSessions = new Map();
 // ------------------ KNOWLEDGE BASE ------------------
 const BACKUP_KNOWLEDGE = `
 GENERAL VISA RULES & DOCUMENTATION GUIDELINES:
-1. FINANCIAL SUFFICIENCY: Applicants must prove 6 months of steady income via bank statements.
+1. FINANCIAL SUFFICIENCY: Applicants must prove 6 months of steady income.
 2. TIES TO HOME: You must prove you will return.
 3. CRIMINAL RECORDS: Requires PCC and rehabilitation proof.
 4. TRAVEL HISTORY: Trusted-country travel helps.
@@ -78,14 +78,8 @@ try {
 
 // ------------------ SYSTEM MESSAGE ------------------
 const SYSTEM_MESSAGE = `
-You are "VisaExpert AI", a warm, friendly, highly strategic visa consultant.
-
-YOUR STYLE:
-- Keep replies SHORT and natural.
-- First analyze ML prediction + user profile.
-- Highlight MAIN factor affecting approval.
-- Give simple improvements.
-- Respond like a human consultant.
+You are "VisaExpert AI", a warm, friendly visa consultant.
+Keep responses short, human-like, and strategic.
 `;
 
 // ------------------ AI CALL ------------------
@@ -112,7 +106,7 @@ async function handleChatMessage(req, res) {
 
     if (!message) return res.status(400).json({ error: "Message is required" });
 
-    // ----- CREATE NEW SESSION -----
+    // Session creation
     if (!sessionId || !chatSessions.has(sessionId)) {
       sessionId = sessionId || uuidv4();
       console.log("🆕 New Session:", sessionId);
@@ -126,29 +120,21 @@ async function handleChatMessage(req, res) {
     const session = chatSessions.get(sessionId);
     let history = session.history;
 
-    // ----- DYNAMIC PROMPT LOGIC -----
+    // Dynamic prompt
     let dynamicSystemPrompt = SYSTEM_MESSAGE;
 
     const isCriminal = userProfile && userProfile.criminal_record === 1;
-
     if (isCriminal) {
       if (!session.hasWarnedCriminal) {
         dynamicSystemPrompt += `
         🚨 CRITICAL: User has a CRIMINAL RECORD.
-        You MUST start the reply with:
+        Start reply with:
         "I see a critical flag regarding a criminal record. This is the main blocker."
-        Then give a rehabilitation strategy.
         `;
         session.hasWarnedCriminal = true;
-      } else {
-        dynamicSystemPrompt += `
-        ✅ You ALREADY gave the criminal-record warning.
-        DO NOT REPEAT IT. Proceed normally.
-        `;
       }
     }
 
-    // ----- BUILD CONTEXT BLOCK -----
     const context = `
     User Profile: ${JSON.stringify(userProfile || {}, null, 2)}
     ML Prediction: ${JSON.stringify(modelPrediction || {}, null, 2)}
@@ -165,14 +151,11 @@ async function handleChatMessage(req, res) {
       { role: "user", content: message },
     ];
 
-    // ----- CALL MODEL -----
     const botReply = await callGroq(messages);
 
-    // ----- UPDATE HISTORY -----
+    // Save conversation
     history.push({ role: "user", text: message });
     history.push({ role: "bot", text: botReply });
-
-    // Keep last 20 messages only
     if (history.length > 20) history = history.slice(-20);
 
     session.history = history;
@@ -195,11 +178,10 @@ function processQueue() {
   processing = true;
   const { req, res } = queue.shift();
 
-  handleChatMessage(req, res)
-    .finally(() => {
-      processing = false;
-      processQueue();
-    });
+  handleChatMessage(req, res).finally(() => {
+    processing = false;
+    processQueue();
+  });
 }
 
 app.post("/api/chat/message", (req, res) => {
