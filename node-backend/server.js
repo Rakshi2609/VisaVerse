@@ -8,7 +8,6 @@ const { v4: uuidv4 } = require("uuid");
 const Groq = require("groq-sdk");
 
 dotenv.config();
-
 const app = express();
 
 // ------------------ SAFETY CHECKS ------------------
@@ -21,32 +20,27 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY || "dummy_key_to_prevent_crash_on_init",
 });
 
-// Best model for speed/quality balance
 const CURRENT_MODEL = "llama-3.3-70b-versatile";
 
 // ------------------ CORS SETUP ------------------
-const clientUrl = process.env.CLIENT_URL || "*"; 
-
 const whitelist = [
-  clientUrl,
-  "http://localhost:5173", 
-  "http://localhost:3000", 
-  "https://visa-verse-six.vercel.app"
+  process.env.CLIENT_URL,
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://visa-verse-six.vercel.app",
 ];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl)
       if (!origin) return callback(null, true);
-      
-      // If whitelist contains '*' or origin is listed, allow it
-      if (whitelist.includes("*") || whitelist.includes(origin)) {
+
+      if (whitelist.includes(origin) || whitelist.includes("*")) {
         return callback(null, true);
-      } else {
-        console.warn(`Blocked CORS request from: ${origin}`);
-        return callback(null, true); // Allow anyway to prevent demo crashes
       }
+
+      console.warn(`❌ Blocked CORS request from ${origin}`);
+      return callback(null, true); // Allow anyway (to avoid breaking demo)
     },
     credentials: true,
   })
@@ -55,36 +49,31 @@ app.use(
 app.use(express.json());
 
 // ------------------ CHAT MEMORY ------------------
-// Stores session state: { history: [], hasWarnedCriminal: boolean }
 const chatSessions = new Map();
 
-// ------------------ KNOWLEDGE BASE (FAIL-SAFE) ------------------
-// 1. Define the Backup Text (Hardcoded)
+// ------------------ KNOWLEDGE BASE ------------------
 const BACKUP_KNOWLEDGE = `
 GENERAL VISA RULES & DOCUMENTATION GUIDELINES:
-1. FINANCIAL SUFFICIENCY: Applicants must prove 6 months of steady income via bank statements. Large unexplained deposits are red flags.
-2. TIES TO HOME: You must prove you will return. Evidence: Job contract, property deeds, family ties.
-3. CRIMINAL RECORDS: Major red flag. Requires Police Clearance Certificate (PCC) and proof of rehabilitation.
-4. TRAVEL HISTORY: Previous travel to trusted nations (USA, UK, Schengen) boosts credibility.
-5. COMMON REFUSAL REASONS: Vague itinerary, low savings vs trip cost, weak employment ties.
+1. FINANCIAL SUFFICIENCY: Applicants must prove 6 months of steady income via bank statements.
+2. TIES TO HOME: You must prove you will return.
+3. CRIMINAL RECORDS: Requires PCC and rehabilitation proof.
+4. TRAVEL HISTORY: Trusted-country travel helps.
+5. COMMON REFUSAL REASONS: Low funds, vague itinerary, weak ties.
 `;
 
-let KNOWLEDGE_TEXT = BACKUP_KNOWLEDGE; // Default to backup
+let KNOWLEDGE_TEXT = BACKUP_KNOWLEDGE;
 
-// 2. Try to read the file (Bonus if it works)
 try {
-  // Use process.cwd() for Vercel
   const ragPath = path.join(process.cwd(), "rag", "visa_knowledge.txt");
-  
+
   if (fs.existsSync(ragPath)) {
     KNOWLEDGE_TEXT = fs.readFileSync(ragPath, "utf8");
-    console.log("✅ Visa Knowledge Base Loaded from File");
+    console.log("✅ Loaded RAG Knowledge Base");
   } else {
-    console.warn("⚠️ RAG File not found. Using Embedded Backup Knowledge.");
+    console.warn("⚠️ RAG file missing — using fallback knowledge.");
   }
 } catch (err) {
-  console.error("❌ Error reading RAG file. Using Backup.", err.message);
-  KNOWLEDGE_TEXT = BACKUP_KNOWLEDGE;
+  console.error("❌ RAG file read error:", err.message);
 }
 
 // ------------------ SYSTEM MESSAGE ------------------
@@ -92,17 +81,15 @@ const SYSTEM_MESSAGE = `
 You are "VisaExpert AI", a warm, friendly, highly strategic visa consultant.
 
 YOUR STYLE:
-- Keep replies SHORT, helpful, and natural.
-- First analyze the user's ML prediction + profile.
-- Highlight the MAIN factor affecting approval (criminal record, income, travel, ties).
-- Give simple, clear improvements.
-- Respond like a human consultant, not a script.
+- Keep replies SHORT and natural.
+- First analyze ML prediction + user profile.
+- Highlight MAIN factor affecting approval.
+- Give simple improvements.
+- Respond like a human consultant.
 `;
 
 // ------------------ AI CALL ------------------
 async function callGroq(messages) {
-  if (!process.env.GROQ_API_KEY) return "⚠️ API Key missing. Please check server logs.";
-
   try {
     const completion = await groq.chat.completions.create({
       model: CURRENT_MODEL,
@@ -118,59 +105,54 @@ async function callGroq(messages) {
   }
 }
 
-// ------------------ MAIN HANDLER ------------------
+// ------------------ MAIN MESSAGE HANDLER ------------------
 async function handleChatMessage(req, res) {
   try {
     let { message, sessionId, userProfile, modelPrediction } = req.body;
 
     if (!message) return res.status(400).json({ error: "Message is required" });
 
-    // 1. INITIALIZE SESSION
+    // ----- CREATE NEW SESSION -----
     if (!sessionId || !chatSessions.has(sessionId)) {
       sessionId = sessionId || uuidv4();
       console.log("🆕 New Session:", sessionId);
-      
+
       chatSessions.set(sessionId, {
         history: [],
-        hasWarnedCriminal: false, // The "Done Tag"
+        hasWarnedCriminal: false,
       });
     }
 
-    // 2. RETRIEVE SESSION
-    let session = chatSessions.get(sessionId);
+    const session = chatSessions.get(sessionId);
     let history = session.history;
 
-    // 3. DYNAMIC PROMPT LOGIC (ANTI-LOOP)
+    // ----- DYNAMIC PROMPT LOGIC -----
     let dynamicSystemPrompt = SYSTEM_MESSAGE;
-    let isCriminal = userProfile && userProfile.criminal_record === 1;
+
+    const isCriminal = userProfile && userProfile.criminal_record === 1;
 
     if (isCriminal) {
       if (!session.hasWarnedCriminal) {
-        // TURN 1: Force the Warning
         dynamicSystemPrompt += `
-        🚨 **CRITICAL CONTEXT:**
-        The user has a CRIMINAL RECORD.
-        You MUST ignore their pleasantries and start with:
-        "I see a critical flag regarding a criminal record. This is the main blocker. We need to address this first."
-        Then suggest a "Rehabilitation Strategy".
+        🚨 CRITICAL: User has a CRIMINAL RECORD.
+        You MUST start the reply with:
+        "I see a critical flag regarding a criminal record. This is the main blocker."
+        Then give a rehabilitation strategy.
         `;
-        session.hasWarnedCriminal = true; // Mark as done
+        session.hasWarnedCriminal = true;
       } else {
-        // TURN 2+: "Done Tag" Active -> Stop repeating!
         dynamicSystemPrompt += `
-        ✅ **CONTEXT:** You have ALREADY warned them about the criminal record.
-        **DO NOT REPEAT THE WARNING.**
-        Now, answer their specific follow-up questions normally.
-        If they ask for a plan, suggest lenient countries but remind them gently about the record.
+        ✅ You ALREADY gave the criminal-record warning.
+        DO NOT REPEAT IT. Proceed normally.
         `;
       }
     }
 
-    // 4. BUILD CONTEXT
+    // ----- BUILD CONTEXT BLOCK -----
     const context = `
     User Profile: ${JSON.stringify(userProfile || {}, null, 2)}
     ML Prediction: ${JSON.stringify(modelPrediction || {}, null, 2)}
-    Knowledge Base: ${KNOWLEDGE_TEXT.substring(0, 1500)}
+    Knowledge Base: ${KNOWLEDGE_TEXT.slice(0, 1500)}
     `;
 
     const messages = [
@@ -183,20 +165,20 @@ async function handleChatMessage(req, res) {
       { role: "user", content: message },
     ];
 
-    // 5. CALL AI
+    // ----- CALL MODEL -----
     const botReply = await callGroq(messages);
 
-    // 6. SAVE HISTORY
+    // ----- UPDATE HISTORY -----
     history.push({ role: "user", text: message });
     history.push({ role: "bot", text: botReply });
-    
+
+    // Keep last 20 messages only
     if (history.length > 20) history = history.slice(-20);
-    
+
     session.history = history;
     chatSessions.set(sessionId, session);
 
-    res.json({ sessionId, response: botReply, history });
-
+    return res.json({ sessionId, response: botReply, history });
   } catch (error) {
     console.error("Handler Error:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -209,13 +191,15 @@ let processing = false;
 
 function processQueue() {
   if (processing || queue.length === 0) return;
-  processing = true;
 
+  processing = true;
   const { req, res } = queue.shift();
-  handleChatMessage(req, res).finally(() => {
-    processing = false;
-    processQueue();
-  });
+
+  handleChatMessage(req, res)
+    .finally(() => {
+      processing = false;
+      processQueue();
+    });
 }
 
 app.post("/api/chat/message", (req, res) => {
@@ -225,10 +209,15 @@ app.post("/api/chat/message", (req, res) => {
 
 // ------------------ HEALTH CHECK ------------------
 app.get("/", (req, res) => {
-  res.send(`VisaExpert AI Backend Running 🟢 (Knowledge Source: ${KNOWLEDGE_TEXT === BACKUP_KNOWLEDGE ? "Embedded Backup" : "External File"})`);
+  res.send(
+    `VisaExpert AI Backend Running 🟢  
+     Knowledge Source: ${
+       KNOWLEDGE_TEXT === BACKUP_KNOWLEDGE ? "Backup" : "RAG File"
+     }`
+  );
 });
 
-// ------------------ VERCEL EXPORT ------------------
+// ------------------ EXPORT FOR VERCEL ------------------
 module.exports = app;
 
 // ------------------ LOCAL DEV START ------------------
