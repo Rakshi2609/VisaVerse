@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -27,6 +27,14 @@ export default function Predict() {
 
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const resultRef = useRef(null);
+
+  // On mobile, scroll to the result card once a prediction is available.
+  useEffect(() => {
+    if (result && window.innerWidth < 1024 && resultRef.current) {
+      resultRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [result]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -36,13 +44,6 @@ export default function Predict() {
     e.preventDefault();
     setLoading(true);
     setResult(null);
-
-    // Scroll to result on mobile after a short delay
-    if (window.innerWidth < 1024) {
-      setTimeout(() => {
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-      }, 100);
-    }
 
     try {
       await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -198,6 +199,7 @@ export default function Predict() {
               <motion.div
                 key="result"
                 id="result-box"
+                ref={resultRef}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, type: "spring" }}
