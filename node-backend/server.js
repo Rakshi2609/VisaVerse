@@ -48,6 +48,14 @@ app.use(
 
 app.use(express.json());
 
+const FASTAPI_URL = "https://visaverse-backend-python.onrender.com"; // change to your actual render URL
+
+setInterval(() => {
+  axios.get(FASTAPI_URL)
+    .then(() => console.log("🔥 Pinged FastAPI backend — kept alive"))
+    .catch((err) => console.log("⚠️ FastAPI ping failed:", err.message));
+}, 240000); // 4 minutes
+
 // ------------------ CHAT MEMORY ------------------
 const chatSessions = new Map();
 
