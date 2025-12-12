@@ -37,6 +37,13 @@ export default function Predict() {
     setLoading(true);
     setResult(null);
 
+    // Scroll to result on mobile after a short delay
+    if (window.innerWidth < 1024) {
+      setTimeout(() => {
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      }, 100);
+    }
+
     try {
       await new Promise((resolve) => setTimeout(resolve, 1200));
 
@@ -66,30 +73,34 @@ export default function Predict() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F0] text-stone-800 font-sans flex items-center justify-center p-6 md:p-12">
+    // RESPONSIVE UPDATE: Reduced padding on mobile (p-4 vs p-12)
+    <div className="min-h-screen bg-[#F5F5F0] text-stone-800 font-sans flex items-center justify-center p-4 md:p-12">
 
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"
+        className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start"
       >
 
         {/* LEFT FORM */}
-        <div className="lg:col-span-7 bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8 md:p-10 border border-stone-100">
+        {/* RESPONSIVE UPDATE: Reduced padding on mobile (p-6 vs p-10) */}
+        <div className="lg:col-span-7 bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 md:p-10 border border-stone-100">
 
-          <header className="mb-10 border-b border-stone-100 pb-6">
+          <header className="mb-8 md:mb-10 border-b border-stone-100 pb-6">
             <div className="flex items-center gap-3 mb-2">
               <div className="bg-indigo-50 p-2 rounded-lg">
                 <Plane className="text-indigo-900 w-5 h-5" />
               </div>
-              <h2 className="text-xs font-bold tracking-widest text-indigo-900 uppercase">Immigration Consultant</h2>
+              <h2 className="text-[10px] md:text-xs font-bold tracking-widest text-indigo-900 uppercase">Immigration Consultant</h2>
             </div>
-            <h1 className="text-3xl md:text-4xl font-serif text-stone-900">Visa Eligibility Assessment</h1>
-            <p className="text-stone-500 mt-3 text-sm">Enter applicant details to generate your ML prediction.</p>
+            {/* RESPONSIVE UPDATE: Smaller title on mobile */}
+            <h1 className="text-2xl md:text-4xl font-serif text-stone-900 leading-tight">Visa Eligibility Assessment</h1>
+            <p className="text-stone-500 mt-2 md:mt-3 text-sm">Enter applicant details to generate your ML prediction.</p>
           </header>
 
-          <form onSubmit={predict} className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-8">
+          {/* RESPONSIVE UPDATE: Gap adjusted for mobile */}
+          <form onSubmit={predict} className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 md:gap-y-8">
 
             {/* INPUT FIELDS */}
             <HumanInput label="Applicant Age" name="age" type="number" value={formData.age} onChange={handleChange} />
@@ -152,8 +163,8 @@ export default function Predict() {
 
             <button 
               disabled={loading}
-              className={`md:col-span-2 mt-6 py-4 rounded-xl font-medium text-lg flex items-center justify-center gap-3
-                ${loading ? "bg-stone-200 text-stone-400" : "bg-indigo-900 text-white hover:bg-indigo-800"}
+              className={`md:col-span-2 mt-4 md:mt-6 py-4 rounded-xl font-medium text-lg flex items-center justify-center gap-3 transition-all active:scale-95
+                ${loading ? "bg-stone-200 text-stone-400" : "bg-indigo-900 text-white hover:bg-indigo-800 shadow-lg shadow-indigo-100"}
               `}
             >
               {loading ? "Processing..." : "Generate Assessment"}
@@ -163,6 +174,7 @@ export default function Predict() {
         </div>
 
         {/* RIGHT RESULT PANEL */}
+        {/* RESPONSIVE UPDATE: Full width on mobile */}
         <div className="lg:col-span-5 flex flex-col h-full justify-start pt-0">
           <AnimatePresence mode="wait">
 
@@ -171,7 +183,8 @@ export default function Predict() {
               <motion.div 
                 key="empty"
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="bg-white rounded-3xl border-2 border-dashed border-stone-200 flex flex-col items-center justify-center p-10 min-h-[400px]"
+                // RESPONSIVE UPDATE: Hidden on mobile to save space until result appears, or reduced height
+                className="hidden lg:flex bg-white rounded-3xl border-2 border-dashed border-stone-200 flex-col items-center justify-center p-10 min-h-[400px]"
               >
                 <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center mb-4 text-stone-400">
                   <User />
@@ -184,6 +197,7 @@ export default function Predict() {
               /* RESULT BOX */
               <motion.div
                 key="result"
+                id="result-box"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, type: "spring" }}
@@ -197,22 +211,22 @@ export default function Predict() {
                   <Stamp className="opacity-20 w-12 h-12" />
                 </div>
 
-                <div className="p-8">
+                <div className="p-6 md:p-8">
                   <div className="flex justify-between items-start mb-8">
                     <div>
                       <p className="text-xs uppercase text-stone-500 font-medium">Status</p>
                       <div 
-                        className={`mt-2 border-4 rounded-lg px-6 py-2 inline-block
+                        className={`mt-2 border-4 rounded-lg px-4 md:px-6 py-2 inline-block
                           ${result.status === "Approved" ? "border-emerald-700 text-emerald-700" : "border-rose-700 text-rose-700"}
                         `}
                       >
-                        <span className="text-2xl font-black uppercase font-serif">{result.status}</span>
+                        <span className="text-xl md:text-2xl font-black uppercase font-serif">{result.status}</span>
                       </div>
                     </div>
 
                     <div className="text-right">
                       <p className="text-xs uppercase text-stone-500">Confidence</p>
-                      <p className="text-3xl font-serif">{result.approval_probability}%</p>
+                      <p className="text-2xl md:text-3xl font-serif">{result.approval_probability}%</p>
                     </div>
                   </div>
 
@@ -254,7 +268,7 @@ export default function Predict() {
 
                     <button 
                       onClick={() => navigate("/assistant")}
-                      className="mt-4 w-full bg-white text-indigo-900 py-3 rounded-lg text-sm font-bold uppercase hover:bg-emerald-50 flex items-center justify-center gap-2"
+                      className="mt-4 w-full bg-white text-indigo-900 py-3 rounded-lg text-sm font-bold uppercase hover:bg-emerald-50 flex items-center justify-center gap-2 transition-colors"
                     >
                       Discuss Strategy <ArrowRight size={16}/>
                     </button>
@@ -274,11 +288,11 @@ export default function Predict() {
 
 const HumanInput = ({ label, icon, ...props }) => (
   <div className="flex flex-col gap-2">
-    <label className="text-xs font-bold text-stone-500 uppercase tracking-wide">{label}</label>
+    <label className="text-[10px] md:text-xs font-bold text-stone-500 uppercase tracking-wide">{label}</label>
     <div className="relative">
       <input
         {...props}
-        className="w-full bg-stone-50 border-b-2 border-stone-200 px-4 py-3 rounded-t-lg focus:border-indigo-900 outline-none transition-all"
+        className="w-full bg-stone-50 border-b-2 border-stone-200 px-3 py-2 md:px-4 md:py-3 text-sm md:text-base rounded-t-lg focus:border-indigo-900 outline-none transition-all"
       />
       {icon && <div className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400">{icon}</div>}
     </div>
@@ -287,11 +301,11 @@ const HumanInput = ({ label, icon, ...props }) => (
 
 const HumanSelect = ({ label, icon, options, complex = false, ...props }) => (
   <div className="flex flex-col gap-2">
-    <label className="text-xs font-bold text-stone-500 uppercase tracking-wide">{label}</label>
+    <label className="text-[10px] md:text-xs font-bold text-stone-500 uppercase tracking-wide">{label}</label>
     <div className="relative">
       <select
         {...props}
-        className="w-full bg-stone-50 border-b-2 border-stone-200 px-4 py-3 rounded-t-lg appearance-none focus:border-indigo-900 outline-none"
+        className="w-full bg-stone-50 border-b-2 border-stone-200 px-3 py-2 md:px-4 md:py-3 text-sm md:text-base rounded-t-lg appearance-none focus:border-indigo-900 outline-none"
       >
         <option value="">Select...</option>
         {options.map((opt, i) => (

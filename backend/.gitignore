@@ -1,35 +1,57 @@
-# Python
+# ----------------------------
+# Python cache and compiled files
+# ----------------------------
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-*.pyc
+*.so
 
-# Virtual environments
+# ----------------------------
+# Virtual environment folders
+# ----------------------------
 venv/
 .env/
 .envrc
 
+# ----------------------------
 # VS Code
+# ----------------------------
 .vscode/
 
-# OS files
+# ----------------------------
+# OS-specific junk
+# ----------------------------
 .DS_Store
 Thumbs.db
 
-# Logs
+# ----------------------------
+# Log files
+# ----------------------------
 *.log
 
-# Environment variables
+# ----------------------------
+# Environment variable files
+# ----------------------------
 .env
 
-# Model files
-model/
-
-# Others
+# ----------------------------
+# Database files
+# ----------------------------
 *.sqlite3
 *.db
 
-# Requirements
+# ----------------------------
+# DO NOT IGNORE THE MODEL DIRECTORY!
+# You NEED model/ in Git for Render.
+# ----------------------------
+
+# If you ever need to ignore large files inside, do it like:
+# model/*.tmp
+
+# ----------------------------
+# Requirements file
+# ----------------------------
+# (Don't ignore it)
 requirements.txt
 !requirements.txt
