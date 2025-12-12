@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { Send, Bot, User, Loader2, ShieldCheck, RefreshCw } from "lucide-react"; 
+import { Send, Bot, User, Loader2, ShieldCheck, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
+// ENV VARIABLE
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
+
 // --- TYPEWRITER COMPONENT ---
-// Simulates typing effect while preserving bold formatting logic
 const Typewriter = ({ text, onComplete }) => {
   const [displayedText, setDisplayedText] = useState("");
   const [isComplete, setIsComplete] = useState(false);
 
   useEffect(() => {
     let index = 0;
-    const speed = 10; // Typing speed in ms
+    const speed = 10;
 
     const timer = setInterval(() => {
       if (index < text.length) {
@@ -29,10 +31,12 @@ const Typewriter = ({ text, onComplete }) => {
 
   return (
     <span>
-      {displayedText.split("**").map((part, index) => 
+      {displayedText.split("**").map((part, index) =>
         index % 2 === 1 ? <span key={index} className="font-bold">{part}</span> : part
       )}
-      {!isComplete && <span className="inline-block w-1.5 h-4 ml-1 bg-indigo-500 animate-pulse align-middle"></span>}
+      {!isComplete && (
+        <span className="inline-block w-1.5 h-4 ml-1 bg-indigo-500 animate-pulse align-middle"></span>
+      )}
     </span>
   );
 };
@@ -47,22 +51,19 @@ export default function Assistant() {
     try {
       const pred = JSON.parse(localStorage.getItem("last_prediction"));
       if (pred && pred.approval_probability !== undefined) {
-         return `Hello. I have your assessment results here.\n\n**Score:** ${pred.approval_probability}%\n**Status:** ${pred.status}\n\nI'm ready to explain the strategy to improve this. What is your main concern?`;
+        return `Hello. I have your assessment results here.\n\n**Score:** ${pred.approval_probability}%\n**Status:** ${pred.status}\n\nI'm ready to explain the strategy to improve this. What is your main concern?`;
       }
     } catch (e) {
       console.error("Error reading local storage", e);
     }
-    return "Hello. I am your dedicated Visa Consultant. \n\nI have reviewed your profile data. How can I assist you with your immigration strategy today?";
+    return "Hello. I am your dedicated Visa Consultant.\n\nI have reviewed your profile data. How can I assist you with your immigration strategy today?";
   };
 
   const [messages, setMessages] = useState([
-    {
-      sender: "bot",
-      text: getInitialMessage(),
-    },
+    { sender: "bot", text: getInitialMessage() },
   ]);
 
-  // --- SCROLLING LOGIC ---
+  // --- SCROLL LOGIC ---
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -73,7 +74,7 @@ export default function Assistant() {
     scrollToBottom();
   }, [messages, loading]);
 
-  // --- DATA LOADING ---
+  // LOAD USER DATA
   const userProfile = JSON.parse(localStorage.getItem("last_form_data")) || {};
   const modelPrediction = JSON.parse(localStorage.getItem("last_prediction")) || {};
 
@@ -87,15 +88,18 @@ export default function Assistant() {
     setLoading(true);
 
     try {
-      const response = await axios.post("http://localhost:5000/api/chat/message", {
-        message: input,
-        sessionId: sessionId,
-        userProfile: userProfile,
-        modelPrediction: modelPrediction,
-      });
+      const response = await axios.post(
+        `${API_BASE}/api/chat/message`,
+        {
+          message: input,
+          sessionId: sessionId,
+          userProfile: userProfile,
+          modelPrediction: modelPrediction,
+        }
+      );
 
       setSessionId(response.data.sessionId);
-      
+
       const botMessage = {
         sender: "bot",
         text: response.data.response,
@@ -118,7 +122,7 @@ export default function Assistant() {
 
   const handleKeyPress = (e) => {
     if (e.key === "Enter" && !loading) {
-      e.preventDefault(); 
+      e.preventDefault();
       sendMessage();
     }
   };
@@ -130,7 +134,7 @@ export default function Assistant() {
 
       {/* MAIN CONTAINER */}
       <div className="w-full max-w-5xl h-[85vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-stone-200 relative z-10">
-        
+
         {/* HEADER */}
         <div className="bg-indigo-950 p-6 flex items-center justify-between shadow-md z-20">
           <div className="flex items-center gap-4">
@@ -148,8 +152,8 @@ export default function Assistant() {
               </div>
             </div>
           </div>
-          
-          <button 
+
+          <button
             onClick={() => window.location.reload()}
             className="p-2 hover:bg-white/10 rounded-lg text-indigo-200 transition-colors"
             title="Reset Session"
@@ -160,7 +164,7 @@ export default function Assistant() {
 
         {/* CHAT AREA */}
         <div className="flex-1 bg-[#F5F5F0] relative overflow-hidden flex flex-col">
-           <div className="absolute inset-0 opacity-50 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] pointer-events-none"></div>
+          <div className="absolute inset-0 opacity-50 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] pointer-events-none"></div>
 
           <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 relative z-10 scroll-smooth">
             <AnimatePresence initial={false}>
@@ -170,34 +174,39 @@ export default function Assistant() {
                   initial={{ opacity: 0, y: 20, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ duration: 0.3 }}
-                  className={`flex items-end gap-3 ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
+                  className={`flex items-end gap-3 ${
+                    msg.sender === "user" ? "justify-end" : "justify-start"
+                  }`}
                 >
-                  {/* BOT AVATAR */}
                   {msg.sender === "bot" && (
                     <div className="w-8 h-8 rounded-full bg-indigo-900 flex items-center justify-center shrink-0 shadow-lg">
                       <Bot size={16} className="text-white" />
                     </div>
                   )}
 
-                  {/* MESSAGE BUBBLE */}
                   <div
                     className={`max-w-[85%] md:max-w-[70%] px-6 py-4 rounded-2xl shadow-sm text-sm md:text-base leading-relaxed whitespace-pre-wrap
-                      ${msg.sender === "user"
-                        ? "bg-indigo-900 text-white rounded-br-none shadow-indigo-200"
-                        : "bg-white text-stone-800 border border-stone-200 rounded-bl-none font-medium"
+                      ${
+                        msg.sender === "user"
+                          ? "bg-indigo-900 text-white rounded-br-none shadow-indigo-200"
+                          : "bg-white text-stone-800 border border-stone-200 rounded-bl-none font-medium"
                       }`}
                   >
-                    {/* TYPEWRITER LOGIC */}
                     {msg.sender === "bot" && i === messages.length - 1 ? (
                       <Typewriter text={msg.text} onComplete={scrollToBottom} />
                     ) : (
-                      msg.text.split("**").map((part, index) => 
-                        index % 2 === 1 ? <span key={index} className="font-bold">{part}</span> : part
+                      msg.text.split("**").map((part, index) =>
+                        index % 2 === 1 ? (
+                          <span key={index} className="font-bold">
+                            {part}
+                          </span>
+                        ) : (
+                          part
+                        )
                       )
                     )}
                   </div>
 
-                  {/* USER AVATAR */}
                   {msg.sender === "user" && (
                     <div className="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center shrink-0">
                       <User size={16} className="text-stone-500" />
@@ -207,15 +216,14 @@ export default function Assistant() {
               ))}
             </AnimatePresence>
 
-            {/* LOADING INDICATOR */}
             {loading && (
-              <motion.div 
-                initial={{ opacity: 0 }} 
+              <motion.div
+                initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="flex items-center gap-3"
               >
                 <div className="w-8 h-8 rounded-full bg-indigo-900 flex items-center justify-center shrink-0">
-                   <Bot size={16} className="text-white" />
+                  <Bot size={16} className="text-white" />
                 </div>
                 <div className="bg-white border border-stone-200 px-4 py-3 rounded-2xl rounded-bl-none shadow-sm flex items-center gap-2">
                   <div className="flex gap-1">
@@ -223,12 +231,13 @@ export default function Assistant() {
                     <span className="w-2 h-2 bg-indigo-900 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
                     <span className="w-2 h-2 bg-indigo-900 rounded-full animate-bounce"></span>
                   </div>
-                  <span className="text-xs text-stone-400 font-medium uppercase tracking-wider ml-2">Consulting...</span>
+                  <span className="text-xs text-stone-400 font-medium uppercase tracking-wider ml-2">
+                    Consulting...
+                  </span>
                 </div>
               </motion.div>
             )}
-            
-            {/* ANCHOR DIV FOR SCROLLING */}
+
             <div ref={messagesEndRef} className="h-1" />
           </div>
         </div>
@@ -236,7 +245,6 @@ export default function Assistant() {
         {/* INPUT AREA */}
         <div className="bg-white p-4 md:p-6 border-t border-stone-200 z-20">
           <div className="relative flex items-center gap-2 max-w-4xl mx-auto">
-            
             <input
               type="text"
               placeholder="Type your message to the consultant..."
@@ -250,9 +258,10 @@ export default function Assistant() {
               onClick={sendMessage}
               disabled={loading || !input.trim()}
               className={`p-4 rounded-xl shadow-lg transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center
-                ${loading || !input.trim() 
-                  ? "bg-stone-200 text-stone-400 cursor-not-allowed shadow-none" 
-                  : "bg-indigo-900 text-white hover:bg-indigo-800 shadow-indigo-200"
+                ${
+                  loading || !input.trim()
+                    ? "bg-stone-200 text-stone-400 cursor-not-allowed shadow-none"
+                    : "bg-indigo-900 text-white hover:bg-indigo-800 shadow-indigo-200"
                 }`}
             >
               {loading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
@@ -262,7 +271,6 @@ export default function Assistant() {
             Advisory provided by AI. Always verify critical details with official embassy documentation.
           </p>
         </div>
-
       </div>
     </div>
   );
