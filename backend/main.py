@@ -169,6 +169,9 @@ def suggest_alternate_countries(profile_strength, chosen, base_probability):
 def root():
     return {"status": "Visa AI Backend is running 🚀"}
 
+@app.head("/")
+def head_root():
+    return ""
 
 # ======================================================
 # MAIN PREDICTION ENDPOINT

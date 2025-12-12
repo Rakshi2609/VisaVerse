@@ -1,16 +1,27 @@
-# React + Vite
+# VisaVerse Frontend (React + Vite)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Immigration assistant UI built with React 19, Vite, Tailwind v4, framer-motion, and lucide-react icons. Pages:
+- Home: marketing hero, CTA cards, process steps.
+- Predict: form-driven visa assessment calling the FastAPI scorer.
+- Assistant: chat experience backed by the Groq-powered Node API; pre-seeds with the last prediction stored locally.
 
-Currently, two official plugins are available:
+## Scripts
+- `npm run dev` — local dev server.
+- `npm run build` — production build.
+- `npm run preview` — preview built assets.
+- `npm run lint` — ESLint (config in eslint.config.js).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Environment Variables
+Create a `.env` or `.env.local`:
+- `VITE_ML_API` — base URL of the FastAPI scorer (e.g., http://localhost:10000).
+- `VITE_BACKEND_URL` — base URL of the Groq chat API (e.g., http://localhost:5000).
 
-## React Compiler
+## Local Setup
+```
+npm install
+VITE_ML_API=http://localhost:10000 VITE_BACKEND_URL=http://localhost:5000 npm run dev
+```
+Frontend defaults to port 5173.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Build Output
+Static assets emitted to `dist/`; deploy behind any static host. Ensure CORS is configured on both APIs for the deployed origin.
