@@ -307,3 +307,8 @@ def predict_visa(data: VisaInput):
         "rejection_reasons": rejection_reasons,
         "alternate_country_suggestions": alternate_countries,
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=10000)
+
