@@ -9,11 +9,12 @@ import os
 # LOAD MODEL + ENCODER
 # ======================================================
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Correct base directory for Render
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_DIR = os.path.join(BASE_DIR, "model")
 
-model = joblib.load(os.path.join(BASE_DIR, "model", "visa_model.pkl"))
-encoder = joblib.load(os.path.join(BASE_DIR, "model", "label_encoder.pkl"))
-
+model = joblib.load(os.path.join(MODEL_DIR, "visa_model.pkl"))
+encoder = joblib.load(os.path.join(MODEL_DIR, "label_encoder.pkl"))
 # ======================================================
 # FASTAPI APP CONFIG
 # ======================================================
